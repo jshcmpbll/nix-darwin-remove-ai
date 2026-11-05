@@ -173,7 +173,7 @@ in
     system.defaults.CustomUserPreferences =
       lib.mkMerge (lib.mapAttrsToList (_: f: f.prefs or { }) enabledFeatures);
 
-    environment.etc.${profilePath}.text = lib.generators.toPlist { } profile;
+    environment.etc.${profilePath}.text = lib.generators.toPlist { escape = true; } profile;
 
     system.activationScripts.postActivation.text = lib.mkAfter ''
       echo "Apple Intelligence restrictions need a profile: open /etc/${profilePath}" >&2
