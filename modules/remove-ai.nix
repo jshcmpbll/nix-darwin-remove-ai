@@ -6,6 +6,7 @@ let
   features = {
     siri = {
       description = "Siri and the Siri status menu";
+      restrictions = [ "allowAssistant" ];
       prefs = {
         "com.apple.assistant.support"."Assistant Enabled" = false;
         "com.apple.Siri" = {
@@ -14,12 +15,40 @@ let
         };
       };
     };
+    writingTools = {
+      description = "Writing Tools";
+      restrictions = [ "allowWritingTools" ];
+    };
+    genmoji = {
+      description = "Genmoji";
+      restrictions = [ "allowGenmoji" ];
+    };
+    imagePlayground = {
+      description = "Image Playground";
+      restrictions = [ "allowImagePlayground" ];
+    };
+    chatgpt = {
+      description = "ChatGPT and other external AI integrations";
+      restrictions = [
+        "allowExternalIntelligenceIntegrations"
+        "allowExternalIntelligenceIntegrationsSignIn"
+      ];
+    };
     mail = {
       description = "Mail summaries and smart replies";
+      restrictions = [ "allowMailSummary" "allowMailSmartReplies" ];
       prefs."group.com.apple.mail" = {
         DisableAutomaticMessageSummarization = true;
         PersonalizedSmartReplies = false;
       };
+    };
+    safariSummaries = {
+      description = "Safari summaries";
+      restrictions = [ "allowSafariSummary" ];
+    };
+    notesSummaries = {
+      description = "Notes transcription summaries";
+      restrictions = [ "allowNotesTranscriptionSummary" ];
     };
     notificationSummaries = {
       description = "Notification summaries";
@@ -63,13 +92,61 @@ let
   };
 
   enabledFeatures = lib.filterAttrs (name: _: cfg.features.${name}) features;
-  removedModels = lib.filterAttrs (name: _: cfg.models.${name}) models;
+  blockedModels = lib.filterAttrs (name: _: cfg.models.${name}) models;
 
-  assetDir = assetType: "/System/Library/AssetsV2/${builtins.replaceStrings [ "." ] [ "_" ] assetType}";
+  restrictions = lib.concatMap (f: f.restrictions or [ ]) (lib.attrValues enabledFeatures);
+
+  identifier = "io.github.nix-darwin-remove-ai";
+
+  uuid = name:
+    let h = builtins.hashString "sha256" name;
+    in lib.concatStringsSep "-" [
+      (builtins.substring 0 8 h)
+      (builtins.substring 8 4 h)
+      "4${builtins.substring 13 3 h}"
+      "8${builtins.substring 17 3 h}"
+      (builtins.substring 20 12 h)
+    ];
+
+  payload = type: suffix: name: {
+    PayloadType = type;
+    PayloadVersion = 1;
+    PayloadIdentifier = "${identifier}.${suffix}";
+    PayloadUUID = uuid "${identifier}.${suffix}";
+    PayloadDisplayName = name;
+  };
+
+  restrictionPayload = payload "com.apple.applicationaccess" "restrictions" "Restrictions"
+    // lib.genAttrs restrictions (_: false);
+
+  blockPayload = payload "com.apple.ManagedClient.preferences" "downloads" "Blocked model downloads"
+    // {
+      PayloadContent."com.apple.MobileAsset".Forced = [{
+        mcx_preference_settings = lib.mapAttrs' (_: m:
+          lib.nameValuePair "DownloadServerBaseURLOverride-${m.assetType}" cfg.blockedUrl
+        ) blockedModels;
+      }];
+    };
+
+  profile = {
+    PayloadType = "Configuration";
+    PayloadVersion = 1;
+    PayloadIdentifier = identifier;
+    PayloadUUID = uuid identifier;
+    PayloadDisplayName = "Remove Apple Intelligence";
+    PayloadOrganization = "nix-darwin-remove-ai";
+    PayloadScope = "System";
+    PayloadRemovalDisallowed = false;
+    PayloadContent =
+      lib.optional (restrictions != [ ]) restrictionPayload
+      ++ lib.optional (blockedModels != { }) blockPayload;
+  };
+
+  profilePath = "remove-ai/RemoveAppleIntelligence.mobileconfig";
 in
 {
   options.programs.removeAppleIntelligence = {
-    enable = lib.mkEnableOption "disabling Apple Intelligence and removing its downloaded models";
+    enable = lib.mkEnableOption "disabling Apple Intelligence and blocking its model downloads";
 
     features = lib.mapAttrs (_: f:
       lib.mkOption {
@@ -82,21 +159,25 @@ in
       lib.mkOption {
         type = lib.types.bool;
         default = true;
-        description = "Delete ${m.description} on activation.";
+        description = "Block macOS from downloading ${m.description}.";
       }) models;
+
+    blockedUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "https://127.0.0.1:9/remove-ai-blocked/";
+      description = "Address the asset service is pointed at for blocked models.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
     system.defaults.CustomUserPreferences =
-      lib.mkMerge (lib.mapAttrsToList (_: f: f.prefs) enabledFeatures);
+      lib.mkMerge (lib.mapAttrsToList (_: f: f.prefs or { }) enabledFeatures);
+
+    environment.etc.${profilePath}.text = lib.generators.toPlist { } profile;
 
     system.activationScripts.postActivation.text = lib.mkAfter ''
-      echo "removing Apple Intelligence models..." >&2
-      ${lib.concatMapStringsSep "\n" (m: ''
-        for dir in ${assetDir m.assetType}*; do
-          [ -d "$dir" ] && rm -rf "$dir"
-        done
-      '') (lib.attrValues removedModels)}
+      echo "Apple Intelligence restrictions need a profile: open /etc/${profilePath}" >&2
+      echo "then approve it in System Settings > General > Device Management." >&2
     '';
   };
 }
