@@ -4,7 +4,7 @@ A [nix-darwin](https://github.com/LnL7/nix-darwin) module that turns off Apple
 Intelligence features and stops macOS from downloading the on-device models.
 
 Inspired by [RemoveMacAI](https://github.com/omlahore/RemoveMacAI), which covers
-far more ground (undo history, a GUI, model deletion). This module is the declarative subset.
+far more ground (undo history, a GUI). This module is the declarative subset.
 
 ## Usage
 
@@ -42,7 +42,7 @@ open /etc/remove-ai/RemoveAppleIntelligence.mobileconfig
 
 ## Options
 
-`features.<name>` turns a feature off. `models.<name>` blocks that model set from downloading.
+`features.<name>` turns a feature off. `models.<name>` selects a model set to delete and block from downloading again.
 
 | Feature | Mechanism |
 |---|---|
@@ -58,13 +58,17 @@ open /etc/remove-ai/RemoveAppleIntelligence.mobileconfig
 | `cleanUp` | Photos Clean Up |
 | `spatialPhotos` | Spatial Photos |
 
+Deleting models goes through the asset service, using the technique mapped by
+[pared](https://github.com/4evy/pared). `programs.removeAppleIntelligence.deleteModels` turns it off.
+
 Preferences go through `system.defaults.CustomUserPreferences`. Restrictions and
 download blocks go in the profile, which nix-darwin cannot install itself.
 
 ## Limitations
 
-- **Models are not deleted.** SIP blocks `rm` on `/System/Library/AssetsV2`, even as root.
-  RemoveMacAI deletes through Apple's private asset service, which this module does not call.
+- Deletion calls Apple's private asset service through a small helper, so a macOS update can break it. `deleteModels = false` skips it.
+- macOS frees the files on its own schedule, so Storage settings may keep counting them for a while.
+- Deletion needs `system.primaryUser` set, as the service is reached over the user's session.
 - The profile needs manual approval.
 - Blocking uses an unofficial key (`DownloadServerBaseURLOverride-*`) from pared and RemoveMacAI.
 - Apple silicon, recent macOS only. Keys and asset names may change between releases.

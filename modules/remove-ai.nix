@@ -1,4 +1,4 @@
-{ config, lib, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   cfg = config.programs.removeAppleIntelligence;
@@ -71,23 +71,28 @@ let
   models = {
     foundation = {
       description = "the Apple Intelligence foundation models";
+      assetSet = "com.apple.modelcatalog";
       assetType = "com.apple.MobileAsset.UAF.FM.GenerativeModels";
     };
     visual = {
       description = "the image and Genmoji models";
       assetType = "com.apple.MobileAsset.UAF.FM.Visual";
+      assetSet = "com.apple.MobileAsset.UAF.FM.Visual";
     };
     code = {
       description = "the Xcode code completion models";
       assetType = "com.apple.MobileAsset.UAF.FM.CodeLM";
+      assetSet = "com.apple.MobileAsset.UAF.FM.CodeLM";
     };
     cleanUp = {
       description = "the Photos Clean Up models";
       assetType = "com.apple.MobileAsset.UAF.Photos.MagicCleanup";
+      assetSet = "com.apple.MobileAsset.UAF.Photos.MagicCleanup";
     };
     spatialPhotos = {
       description = "the Spatial Photos models";
       assetType = "com.apple.MobileAsset.UAF.Photos.SpatialPhotosRelive";
+      assetSet = "com.apple.MobileAsset.UAF.Photos.SpatialPhotosRelive";
     };
   };
 
@@ -142,6 +147,10 @@ let
       ++ lib.optional (blockedModels != { }) blockPayload;
   };
 
+  uafTool = pkgs.callPackage ../pkgs/uaf-tool.nix { };
+
+  assetSets = lib.mapAttrsToList (_: m: m.assetSet) blockedModels;
+
   profilePath = "remove-ai/RemoveAppleIntelligence.mobileconfig";
 in
 {
@@ -162,6 +171,12 @@ in
         description = "Block macOS from downloading ${m.description}.";
       }) models;
 
+    deleteModels = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Delete the selected models through Apple's asset service on activation.";
+    };
+
     blockedUrl = lib.mkOption {
       type = lib.types.str;
       default = "https://127.0.0.1:9/remove-ai-blocked/";
@@ -175,9 +190,20 @@ in
 
     environment.etc.${profilePath}.text = lib.generators.toPlist { escape = true; } profile;
 
+    assertions = [{
+      assertion = !cfg.deleteModels || config.system.primaryUser != null;
+      message = "programs.removeAppleIntelligence.deleteModels requires system.primaryUser.";
+    }];
+
     system.activationScripts.postActivation.text = lib.mkAfter ''
       echo "Apple Intelligence restrictions need a profile: open /etc/${profilePath}" >&2
       echo "then approve it in System Settings > General > Device Management." >&2
+      ${lib.optionalString (cfg.deleteModels && assetSets != [ ]) ''
+        echo "removing Apple Intelligence models..." >&2
+        launchctl asuser "$(id -u ${config.system.primaryUser})" \
+          sudo -u ${config.system.primaryUser} ${uafTool}/bin/uaf-tool reset ${lib.escapeShellArgs assetSets} \
+          || echo "model removal failed; see above" >&2
+      ''}
     '';
   };
 }
