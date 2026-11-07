@@ -61,8 +61,9 @@ open /etc/remove-ai/RemoveAppleIntelligence.mobileconfig
 Deleting models goes through the asset service, using the technique mapped by
 [pared](https://github.com/4evy/pared). `programs.removeAppleIntelligence.deleteModels` turns it off.
 
-Preferences go through `system.defaults.CustomUserPreferences`. Restrictions and
-download blocks go in the profile, which nix-darwin cannot install itself.
+Restrictions, preferences and download blocks all go in the profile, which nix-darwin
+cannot install itself. Preferences are forced there because `defaults write` cannot
+reach protected domains such as Messages and Mail.
 
 ## Limitations
 

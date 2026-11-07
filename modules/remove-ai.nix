@@ -99,6 +99,8 @@ let
   enabledFeatures = lib.filterAttrs (name: _: cfg.features.${name}) features;
   blockedModels = lib.filterAttrs (name: _: cfg.models.${name}) models;
 
+  forcedPrefs = lib.foldl' lib.recursiveUpdate { } (map (f: f.prefs or { }) (lib.attrValues enabledFeatures));
+
   restrictions = lib.concatMap (f: f.restrictions or [ ]) (lib.attrValues enabledFeatures);
 
   identifier = "io.github.nix-darwin-remove-ai";
@@ -124,6 +126,12 @@ let
   restrictionPayload = payload "com.apple.applicationaccess" "restrictions" "Restrictions"
     // lib.genAttrs restrictions (_: false);
 
+  prefPayloads = lib.mapAttrsToList (domain: settings:
+    let d = if domain == "NSGlobalDomain" then ".GlobalPreferences" else domain;
+    in payload "com.apple.ManagedClient.preferences" "preferences.${d}" "Forced settings: ${d}"
+      // { PayloadContent.${d}.Forced = [{ mcx_preference_settings = settings; }]; }
+  ) forcedPrefs;
+
   blockPayload = payload "com.apple.ManagedClient.preferences" "downloads" "Blocked model downloads"
     // {
       PayloadContent."com.apple.MobileAsset".Forced = [{
@@ -144,6 +152,7 @@ let
     PayloadRemovalDisallowed = false;
     PayloadContent =
       lib.optional (restrictions != [ ]) restrictionPayload
+      ++ prefPayloads
       ++ lib.optional (blockedModels != { }) blockPayload;
   };
 
@@ -185,9 +194,6 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    system.defaults.CustomUserPreferences =
-      lib.mkMerge (lib.mapAttrsToList (_: f: f.prefs or { }) enabledFeatures);
-
     environment.etc.${profilePath}.text = lib.generators.toPlist { escape = true; } profile;
 
     assertions = [{
