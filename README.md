@@ -53,7 +53,7 @@ download the models again.
 | Option | Default | Effect |
 |---|---|---|
 | `features.<name>` | `true` | Turn that feature off |
-| `models.<name>` | `true` | Delete that model set and block it from downloading |
+| `models.<name>` | `true` | Delete that model set and block it, unless a feature that needs it is kept |
 | `deleteModels` | `true` | Delete the selected models on activation |
 | `openProfile` | `true` | Open the profile for approval until it is installed |
 | `blockedUrl` | closed local port | Where blocked model downloads are pointed |
@@ -65,14 +65,15 @@ download the models again.
 | `siri`, `mail` | restriction and forced preference |
 | `writingTools`, `genmoji`, `imagePlayground`, `chatgpt`, `safariSummaries`, `notesSummaries` | restriction |
 | `notificationSummaries`, `messagesSummaries`, `inlinePredictions`, `spatialPhotos` | forced preference |
+| `photosCleanUp`, `xcodeCompletion` | none; keeps their models |
 
-| Model | Contents |
+| Model | Kept when any of these features is kept |
 |---|---|
-| `foundation` | Apple Intelligence foundation models (the largest set) |
-| `visual` | Image Playground and Genmoji |
-| `code` | Xcode code completion |
-| `cleanUp` | Photos Clean Up |
-| `spatialPhotos` | Spatial Photos |
+| `foundation` | `siri`, `writingTools`, `genmoji`, `imagePlayground`, `mail`, `notificationSummaries`, `messagesSummaries`, `safariSummaries`, `notesSummaries` |
+| `visual` | `genmoji`, `imagePlayground` |
+| `code` | `xcodeCompletion` |
+| `cleanUp` | `photosCleanUp` |
+| `spatialPhotos` | `spatialPhotos` |
 
 Models are deleted through Apple's asset service, using the technique mapped by
 [pared](https://github.com/4evy/pared).
@@ -86,7 +87,6 @@ not restored; macOS downloads them again once the block is gone and a feature wa
 
 - Deletion calls Apple's private asset service through a small helper, so a macOS update can break it.
 - macOS frees the files on its own schedule, so Storage settings may keep counting them for a while.
-- Models and features are independent: `features.siri = false` does not keep the foundation models.
 - The profile needs manual approval, and a changed profile is not reopened once one is installed.
 - Blocking uses an unofficial key (`DownloadServerBaseURLOverride-*`) from pared and RemoveMacAI.
 - Apple silicon, recent macOS only. Keys and asset names may change between releases.

@@ -66,38 +66,50 @@ let
       description = "Spatial Photos";
       prefs."com.apple.spatialphotosrelive".LocallyDisabled = true;
     };
+    photosCleanUp = {
+      description = "Photos Clean Up";
+    };
+    xcodeCompletion = {
+      description = "Xcode predictive code completion";
+    };
   };
 
   models = {
     foundation = {
       description = "the Apple Intelligence foundation models";
+      features = [ "siri" "writingTools" "genmoji" "imagePlayground" "mail" "notificationSummaries" "messagesSummaries" "safariSummaries" "notesSummaries" ];
       assetSet = "com.apple.modelcatalog";
       assetType = "com.apple.MobileAsset.UAF.FM.GenerativeModels";
     };
     visual = {
       description = "the image and Genmoji models";
+      features = [ "genmoji" "imagePlayground" ];
       assetType = "com.apple.MobileAsset.UAF.FM.Visual";
       assetSet = "com.apple.MobileAsset.UAF.FM.Visual";
     };
     code = {
       description = "the Xcode code completion models";
+      features = [ "xcodeCompletion" ];
       assetType = "com.apple.MobileAsset.UAF.FM.CodeLM";
       assetSet = "com.apple.MobileAsset.UAF.FM.CodeLM";
     };
     cleanUp = {
       description = "the Photos Clean Up models";
+      features = [ "photosCleanUp" ];
       assetType = "com.apple.MobileAsset.UAF.Photos.MagicCleanup";
       assetSet = "com.apple.MobileAsset.UAF.Photos.MagicCleanup";
     };
     spatialPhotos = {
       description = "the Spatial Photos models";
+      features = [ "spatialPhotos" ];
       assetType = "com.apple.MobileAsset.UAF.Photos.SpatialPhotosRelive";
       assetSet = "com.apple.MobileAsset.UAF.Photos.SpatialPhotosRelive";
     };
   };
 
   enabledFeatures = lib.filterAttrs (name: _: cfg.features.${name}) features;
-  blockedModels = lib.filterAttrs (name: _: cfg.models.${name}) models;
+  removed = name: cfg.models.${name} && lib.all (f: cfg.features.${f}) models.${name}.features;
+  blockedModels = lib.filterAttrs (name: _: removed name) models;
 
   forcedPrefs = lib.foldl' lib.recursiveUpdate { } (map (f: f.prefs or { }) (lib.attrValues enabledFeatures));
 
@@ -177,7 +189,7 @@ in
       lib.mkOption {
         type = lib.types.bool;
         default = true;
-        description = "Block macOS from downloading ${m.description}.";
+        description = "Delete and block ${m.description}, unless a feature that needs them is kept.";
       }) models;
 
     deleteModels = lib.mkOption {
