@@ -33,8 +33,8 @@ programs.removeAppleIntelligence = {
 };
 ```
 
-After the first switch, open the generated profile and approve it in
-System Settings > General > Device Management:
+After the first switch the profile opens automatically (`openProfile = false` disables
+that). Approve it in System Settings > General > Device Management. To reopen it:
 
 ```sh
 open /etc/remove-ai/RemoveAppleIntelligence.mobileconfig

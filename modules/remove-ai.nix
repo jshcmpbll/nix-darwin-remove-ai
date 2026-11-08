@@ -186,6 +186,12 @@ in
       description = "Delete the selected models through Apple's asset service on activation.";
     };
 
+    openProfile = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Open the profile for approval on activation while it is not installed.";
+    };
+
     blockedUrl = lib.mkOption {
       type = lib.types.str;
       default = "https://127.0.0.1:9/remove-ai-blocked/";
@@ -197,13 +203,19 @@ in
     environment.etc.${profilePath}.text = lib.generators.toPlist { escape = true; } profile;
 
     assertions = [{
-      assertion = !cfg.deleteModels || config.system.primaryUser != null;
-      message = "programs.removeAppleIntelligence.deleteModels requires system.primaryUser.";
+      assertion = !(cfg.deleteModels || cfg.openProfile) || config.system.primaryUser != null;
+      message = "programs.removeAppleIntelligence.deleteModels and openProfile require system.primaryUser.";
     }];
 
     system.activationScripts.postActivation.text = lib.mkAfter ''
       echo "Apple Intelligence restrictions need a profile: open /etc/${profilePath}" >&2
       echo "then approve it in System Settings > General > Device Management." >&2
+      ${lib.optionalString cfg.openProfile ''
+        if ! /usr/bin/profiles -P 2>/dev/null | grep -q '${identifier}'; then
+          launchctl asuser "$(id -u ${config.system.primaryUser})" \
+            sudo -u ${config.system.primaryUser} open /etc/${profilePath} || true
+        fi
+      ''}
       ${lib.optionalString (cfg.deleteModels && assetSets != [ ]) ''
         echo "removing Apple Intelligence models..." >&2
         launchctl asuser "$(id -u ${config.system.primaryUser})" \
